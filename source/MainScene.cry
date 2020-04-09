@@ -1,0 +1,207 @@
+import Graphics2D;
+import Math;
+import Random;
+import TwoCansAlpha4;
+
+const X_RES = 640.0;
+const Y_RES = 480.0;
+
+const Y_BARRIER = 0.75 * Y_RES;
+
+const PADDLE_RADIUS = 40.0;
+const PADDLE_THICKNESS = 10.0;
+
+const ROTATION_PER_FRAME = 0.05;
+const MAX_ABS_ANGLE = 0.15 * Math.PI;
+
+const BALL_RADIUS = 7.0;
+const BALL_TRAIL_LENGTH = 20;
+
+const GRAVITY = 0.2;
+
+// Finds the intersection point between the given edges or null if no intersection.
+// Adapted from https://stackoverflow.com/a/1968345/3217185.
+function edgeEdgeIntersection(edges) {
+	// Edges that share a node do not intersect.
+	if (edges[0][0] == edges[1][0] || edges[0][0] == edges[1][1] || edges[0][1] == edges[1][0] || edges[0][1] == edges[1][1]) {
+		return null;
+	}
+
+	// Put left points first.
+	if (edges[0][0][0] <= edges[0][1][0]) {
+		p0_x = edges[0][0][0];
+		p0_y = edges[0][0][1];
+		p1_x = edges[0][1][0];
+		p1_y = edges[0][1][1];
+	} else {
+		p0_x = edges[0][1][0];
+		p0_y = edges[0][1][1];
+		p1_x = edges[0][0][0];
+		p1_y = edges[0][0][1];
+	}
+	// p0 is the left-most node of edges[0].
+	if (edges[1][0][0] <= edges[1][1][0]) {
+		p2_x = edges[1][0][0];
+		p2_y = edges[1][0][1];
+		p3_x = edges[1][1][0];
+		p3_y = edges[1][1][1];
+	} else {
+		p2_x = edges[1][1][0];
+		p2_y = edges[1][1][1];
+		p3_x = edges[1][0][0];
+		p3_y = edges[1][0][1];
+	}
+	// p2 is the left-most node of edges[1].
+
+	// Rule out intersection if one edge is completely to one side of the other.
+	if (p1_x < p2_x) {
+		// edges[0] left of edges[1].
+		return null;
+	}
+	if (p0_x > p3_x) {
+		// edges[0] right of edges[1].
+		return null;
+	}
+	if (Math.max(p0_y, p1_y) < Math.min(p2_y, p3_y)) {
+		// edges[0] above edges[1].
+		return null;
+	}
+	if (Math.min(p0_y, p1_y) > Math.max(p2_y, p3_y)) {
+		// edges[0] below edges[1].
+		return null;
+	}
+
+	s1_x = p1_x - p0_x;
+	s1_y = p1_y - p0_y;
+	s2_x = p3_x - p2_x;
+	s2_y = p3_y - p2_y;
+
+	denominator = -s2_x * s1_y + s1_x * s2_y;
+	if (denominator == 0.0) {
+		// Parallel. Could be collinear (ignoring this case).
+		return null;
+	}
+
+	s = (-s1_y * (p0_x - p2_x) + s1_x * (p0_y - p2_y)) / denominator;
+	t = ( s2_x * (p0_y - p2_y) - s2_y * (p0_x - p2_x)) / denominator;
+
+	if (0.0 <= s && s <= 1.0 && 0.0 <= t && t <= 1.0) {
+		return [p0_x + t * s1_x, p0_y + t * s1_y];
+	} else {
+		return null;
+	}
+}
+
+class MainScene : AbstractScene {
+	field rotating = false;
+
+	field paddlePos = [X_RES / 2.0, (Y_RES - Y_BARRIER) / 2.0];
+	field paddleLeftPos;
+	field paddleRightPos;
+	field paddleAngle = 0.0;
+
+	field ballsPos = [[[X_RES / 2.0, 0] * BALL_TRAIL_LENGTH]];
+	field ballsVel = [[0.0, 0.0]];
+
+	constructor() {}
+
+	function update(inputManager, events) {
+		// Update and constrain paddle position.
+		mousePos = inputManager.getMousePosition();
+		if (mousePos[0] < 0.0) {
+			mousePos[0] = 0.0;
+		} else if (mousePos[0] > X_RES) {
+			mousePos[0] = X_RES;
+		}
+		if (mousePos[1] < Y_BARRIER) {
+			mousePos[1] = Y_BARRIER;
+		} else if (mousePos[1] > Y_RES) {
+			mousePos[1] = Y_RES;
+		}
+		mouseDx = mousePos[0] - this.paddlePos[0];
+		mouseDy = mousePos[1] - this.paddlePos[1];
+		this.paddlePos = mousePos;
+		// Paddle rotation.
+		if (inputManager.isKeyPressed(KeyboardKey.A) && this.paddleAngle > -MAX_ABS_ANGLE) {
+			this.paddleAngle -= ROTATION_PER_FRAME;
+		}
+		if (inputManager.isKeyPressed(KeyboardKey.D) && this.paddleAngle < MAX_ABS_ANGLE) {
+			this.paddleAngle += ROTATION_PER_FRAME;
+		}
+		if (inputManager.isKeyPressed(KeyboardKey.S)) {
+			if (Math.abs(this.paddleAngle) < ROTATION_PER_FRAME) {
+				this.paddleAngle = 0.0;
+			}
+			if (this.paddleAngle > 0.0) {
+				this.paddleAngle -= ROTATION_PER_FRAME;
+			} else if (this.paddleAngle < 0.0) {
+				this.paddleAngle += ROTATION_PER_FRAME;
+			}
+		}
+		// Compute paddle endpoints.
+		x = Math.cos(this.paddleAngle);
+		y = Math.sin(this.paddleAngle);
+		this.paddleLeftPos = [this.paddlePos[0] - x * PADDLE_RADIUS, this.paddlePos[1] - y * PADDLE_RADIUS];
+		this.paddleRightPos = [this.paddlePos[0] + x * PADDLE_RADIUS, this.paddlePos[1] + y * PADDLE_RADIUS];
+		// Update physics.
+		for (i = 0; i < this.ballsPos.length; ++i) {
+			// Update velocity.
+			this.ballsVel[i][1] += GRAVITY;
+			// Update position.
+			newX = this.ballsPos[i][this.ballsPos[i].length - 1][0] + this.ballsVel[i][0];
+			newY = this.ballsPos[i][this.ballsPos[i].length - 1][1] + this.ballsVel[i][1];
+			// Check for intersection with paddle.
+			intersection = edgeEdgeIntersection([[this.ballsPos[i][this.ballsPos[i].length - 1], [newX, newY]], [this.paddleLeftPos, this.paddleRightPos]]);
+			if (intersection != null) {
+				print("intersection");
+				this.ballsPos[i].add(intersection);
+				this.ballsVel[i][1] *= -1.0;
+			} else {
+				// Add pos to list.
+				this.ballsPos[i].add([newX, newY]);
+			}
+			if (this.ballsPos[i].length > BALL_TRAIL_LENGTH) {
+				this.ballsPos[i].remove(0);
+			}
+		}
+	}
+
+	function render() {
+		Graphics2D.Draw.fill(192, 192, 192);
+
+		// Draw paddle area, below barrier.
+		Graphics2D.Draw.rectangle
+			( 0, Y_BARRIER
+			, X_RES, Y_RES - Y_BARRIER
+			, 255, 255, 255
+			);
+
+		// Draw paddle.
+		x = Math.cos(this.paddleAngle);
+		y = Math.sin(this.paddleAngle);
+		Graphics2D.Draw.line
+			( this.paddleLeftPos[0], this.paddleLeftPos[1]
+			, this.paddleRightPos[0], this.paddleRightPos[1]
+			, PADDLE_THICKNESS
+			, 0, 0, 0
+			);
+
+		// Draw balls.
+		for (i = 0; i < this.ballsPos.length; ++i) {
+			n = this.ballsPos[i].length;
+			for (j = 0; j < n - 1; ++j) {
+				Graphics2D.Draw.line
+					( this.ballsPos[i][j][0], this.ballsPos[i][j][1]
+					, this.ballsPos[i][j + 1][0], this.ballsPos[i][j + 1][1]
+					, 2 * BALL_RADIUS * j / n
+					, 128, 128, 128
+					);
+			}
+			Graphics2D.Draw.ellipse
+				( this.ballsPos[i][n - 1][0] - BALL_RADIUS, this.ballsPos[i][n - 1][1] - BALL_RADIUS
+				, 2.0 * BALL_RADIUS, 2.0 * BALL_RADIUS
+				, 0, 0, 0
+				);
+		}
+	}
+}
