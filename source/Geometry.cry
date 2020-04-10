@@ -1,0 +1,135 @@
+// Adapted from http://twistedoakstudios.com/blog/Post2194_determining-exactly-ifwhenwhere-a-moving-line-intersected-a-moving-point
+
+import Math;
+
+class Vector {
+	field x;
+	field y;
+
+	constructor(x, y) {
+		this.x = x;
+		this.y = y;
+	}
+
+	function plus(that) {
+		return new Vector(this.x + that.x, this.y + that.y);
+	}
+
+	function minus(that) {
+		return new Vector(this.x - that.x, this.y - that.y);
+	}
+
+	function negate() {
+		return new Vector(-this.x, -this.y);
+	}
+
+	function times(scale) {
+		return new Vector(this.x * scale, this.y * scale);
+	}
+
+	function dot(that) {
+		return this.x * that.x + this.y * that.y;
+	}
+
+	function cross(that) {
+		return this.x * that.y - this.y * that.x;
+	}
+}
+
+class Point {
+	field x;
+	field y;
+
+	constructor(x, y) {
+		this.x = x;
+		this.y = y;
+	}
+
+	function plus(delta) {
+		return new Point(this.x + delta.x, this.y + delta.y);
+	}
+
+	function minus(that) {
+		return new Vector(this.x - that.x, this.y - that.y);
+	}
+}
+
+class LineSegment {
+	field start;
+	field delta;
+
+	constructor(start, end) {
+		this.start = start;
+		this.delta = end.minus(start);
+	}
+
+	function end() { return this.start.plus(this.delta); }
+
+	function lerpAcross(proportion) {
+		return this.start.plus(this.delta.times(proportion));
+	}
+}
+
+class Sweep {
+	field timeProportion;
+	field acrossProportion;
+
+	constructor(timeProportion, acrossProportion) {
+		this.timeProportion = timeProportion;
+		this.acrossProportion = acrossProportion;
+	}
+}
+
+function whenLineSweepsPoint(/*LineSegment*/ pathOfLineStartPoint, /*LineSegment*/ pathOfLineEndPoint, /*Point*/ point) {
+	a = point.minus(pathOfLineStartPoint.start);
+	b = pathOfLineStartPoint.delta.negate();
+	c = pathOfLineEndPoint.start.minus(pathOfLineStartPoint.start);
+	d = pathOfLineEndPoint.delta.minus(pathOfLineStartPoint.delta);
+
+	result = [];
+	for (t : quadraticRoots(b.cross(d), a.cross(d) + b.cross(c), a.cross(c))) {
+		if (0.0 <= t && t <= 1.0) {
+			start = pathOfLineStartPoint.lerpAcross(t);
+			end = pathOfLineEndPoint.lerpAcross(t);
+			s = lerpProjectOnto(point, new LineSegment(start, end));
+			if (s != null && 0.0 <= s && s <= 1.0) {
+				result.add(new Sweep(t, s));
+			}
+		}
+	}
+	return result;
+}
+
+function lerpProjectOnto(/*Point*/ point, /*LineSegment*/ line) {
+	d = line.delta.dot(line.delta);
+	return d == 0.0 ? null : point.minus(line.start).dot(line.delta) / d;
+}
+
+function quadraticRoots(a, b, c) {
+	if (a == 0.0) {
+		// Linear case.
+		if (b == 0.0) {
+			// Constant case, either zero or infinitely many solutions (ignore the latter case).
+			return [];
+		} else {
+			return [-c / b];
+		}
+	}
+
+	// ax^2 + bx + c == 0
+	// x = (-b +- sqrt(b^2 - 4ac)) / 2a
+
+	determinant = b * b - 4 * a * c;
+	if (determinant < 0.0) {
+		// No real roots.
+		return [];
+	}
+
+	s0 = -b / (2 * a);
+	sd = determinant ** 0.5 / (2 * a);
+	if (sd == 0.0) {
+		return [s0 - sd];
+	} else {
+		return [s0 - sd, s0 + sd];
+	}
+}
