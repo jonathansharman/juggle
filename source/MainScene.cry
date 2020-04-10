@@ -8,7 +8,7 @@ const Y_RES = 480.0;
 
 const Y_BARRIER = 0.75 * Y_RES;
 
-const PADDLE_RADIUS = 40.0;
+const PADDLE_RADIUS = 50.0;
 const PADDLE_THICKNESS = 10.0;
 
 const ROTATION_PER_FRAME = 0.05;
@@ -18,6 +18,8 @@ const BALL_RADIUS = 7.0;
 
 const GRAVITY = 0.2;
 
+const NEW_BALL_PERIOD = 500;
+
 class MainScene : AbstractScene {
 	field rotating = false;
 
@@ -26,8 +28,10 @@ class MainScene : AbstractScene {
 	field paddleRightPos;
 	field paddleAngle = 0.0;
 
-	field ballsPos = [new Point(X_RES / 2.0, 0.0)];
-	field ballsVel = [new Vector(0.0, 0.0)];
+	field ballsPos = [];
+	field ballsVel = [];
+
+	field newBallTimer = NEW_BALL_PERIOD;
 
 	constructor() {
 		this.paddleLeftPos = new Point(this.paddlePos.x - PADDLE_RADIUS, this.paddlePos.y);
@@ -35,6 +39,13 @@ class MainScene : AbstractScene {
 	}
 
 	function update(inputManager, events) {
+		// Spawn balls periodically.
+		--this.newBallTimer;
+		if (this.ballsPos.length == 0 || this.newBallTimer == 0) {
+			this.ballsPos.add(new Point(Random.randomFloat() * X_RES, 0));
+			this.ballsVel.add(new Vector(Random.randomFloat() * 2.0 - 1.0, 0.0));
+			this.newBallTimer = NEW_BALL_PERIOD;
+		}
 		// Get new paddle position.
 		mousePos = inputManager.getMousePosition();
 		newPaddlePos = new Point(mousePos[0], mousePos[1]);
@@ -101,6 +112,13 @@ class MainScene : AbstractScene {
 			// Bounce off walls.
 			if ((this.ballsPos[i].x > X_RES && this.ballsVel[i].x > 0.0) || (this.ballsPos[i].x < 0.0 && this.ballsVel[i].x < 0.0)) {
 				this.ballsVel[i].x = -this.ballsVel[i].x;
+			}
+		}
+		// Purge out-of-bounds balls.
+		for (i = 0; i < this.ballsPos.length; ++i) {
+			if (this.ballsPos[i].y > Y_RES) {
+				this.ballsPos.remove(i);
+				this.ballsVel.remove(i);
 			}
 		}
 		// Update paddle position.
