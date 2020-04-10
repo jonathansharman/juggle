@@ -17,14 +17,15 @@ const MAX_ABS_ANGLE = 0.15 * Math.PI;
 
 const BALL_RADIUS = 7.0;
 
-const GRAVITY = 0.2;
+const GRAVITY = 0.12;
 
 const NEW_BALL_PERIOD = 500;
 
+// Proportion of paddle velocity transferred to balls on contact.
+const VEL_TRANSFER = 0.2;
+
 class MainScene : AbstractScene {
-	static field font = FontResource.fromSystem("Times New Roman").getRenderer()
-			.setColor(0, 0, 0)
-			.setSize(16);
+	static field font = FontResource.fromSystem("Times New Roman").getRenderer().setSize(16);
 
 	field rotating = false;
 
@@ -90,30 +91,37 @@ class MainScene : AbstractScene {
 		y = Math.sin(this.paddleAngle);
 		newPaddleLeftPos = new Point(this.paddlePos.x - x * PADDLE_RADIUS, this.paddlePos.y - y * PADDLE_RADIUS);
 		newPaddleRightPos = new Point(this.paddlePos.x + x * PADDLE_RADIUS, this.paddlePos.y + y * PADDLE_RADIUS);
+		// Compute central paddle velocity.
+		paddleVel = newPaddlePos.minus(this.paddlePos);
 		// Update physics.
 		for (i = 0; i < this.ballsPos.length; ++i) {
 			// Update velocity.
 			this.ballsVel[i].y += GRAVITY;
 			// Update position.
 			newBallPos = new Point(this.ballsPos[i].x + this.ballsVel[i].x, this.ballsPos[i].y + this.ballsVel[i].y);
-			// Check for intersection with paddle.
-			p0 = this.paddleLeftPos;
-			p1 = newPaddleLeftPos;
-			q0 = this.paddleRightPos;
-			q1 = newPaddleRightPos;
-			c0 = this.ballsPos[i];
-			c1 = newBallPos;
-			sweeps = whenLineSweepsPoint(new LineSegment(p0.minus(c0), p1.minus(c1)), new LineSegment(q0.minus(c0), q1.minus(c1)), new Point(0.0, 0.0));
+			// Check for intersection with paddle only for balls moving downward.
+			sweeps = whenLineSweepsPoint
+				( new LineSegment
+					( this.paddleLeftPos.minus(this.ballsPos[i])
+					, newPaddleLeftPos.minus(newBallPos)
+					)
+				, new LineSegment
+					( this.paddleRightPos.minus(this.ballsPos[i])
+					, newPaddleRightPos.minus(newBallPos)
+					)
+				, new Point(0.0, 0.0)
+				);
 			if (sweeps.length > 0) {
-				for (hit : sweeps) {
-					hitPos = new LineSegment(c0, c1).lerpAcross(hit.timeProportion);
+				for (sweep : sweeps) {
+					hitPos = new LineSegment(this.ballsPos[i], newBallPos).lerpAcross(sweep[0]);
 					// Reflect velocity over the normal.
 					n = new Vector(-Math.sin(this.paddleAngle), Math.cos(this.paddleAngle));
 					d = this.ballsVel[i];
 					r = d.minus(n.times(2 * d.dot(n)));
 					this.ballsVel[i] = r;
+					this.ballsVel[i] = this.ballsVel[i].plus(n.times(VEL_TRANSFER * paddleVel.dot(n)));
 					// Compute the ball's corrected position.
-					this.ballsPos[i] = hitPos.plus(this.ballsVel[i].times(1.0 - hit.timeProportion));
+					this.ballsPos[i] = hitPos.plus(this.ballsVel[i].times(1.0 - sweep[0]));
 				}
 			} else {
 				this.ballsPos[i] = newBallPos;
@@ -158,14 +166,29 @@ class MainScene : AbstractScene {
 
 		// Draw balls.
 		for (i = 0; i < this.ballsPos.length; ++i) {
-			Graphics2D.Draw.ellipse
-				( this.ballsPos[i].x - BALL_RADIUS, this.ballsPos[i].y - BALL_RADIUS
-				, 2.0 * BALL_RADIUS, 2.0 * BALL_RADIUS
-				, 0, 0, 0
-				);
+			if (this.ballsPos[i].y < -BALL_RADIUS) {
+				Graphics2D.Draw.triangle
+					( this.ballsPos[i].x, 5
+					, this.ballsPos[i].x - 7, 19
+					, this.ballsPos[i].x + 7, 19
+					, 0, 0, 0, 10000 / -this.ballsPos[i].y
+					);
+			} else {
+				Graphics2D.Draw.ellipse
+					( this.ballsPos[i].x - BALL_RADIUS, this.ballsPos[i].y - BALL_RADIUS
+					, 2.0 * BALL_RADIUS, 2.0 * BALL_RADIUS
+					, 0, 0, 0
+					);
+			}
 		}
 
 		// Draw max balls.
-		MainScene.font.render(this.maxBalls + "  ").draw(X_RES - scoreText.width, 0);
+		if (this.ballsPos.length == this.maxBalls) {
+			MainScene.font.setColor(0, 0, 0);
+		} else {
+			MainScene.font.setColor(128, 128, 128);
+		}
+		scoreText = MainScene.font.render(this.ballsPos.length + " | " + this.maxBalls + "  ");
+		scoreText.draw(X_RES - scoreText.width, 0);
 	}
 }

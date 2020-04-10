@@ -70,16 +70,6 @@ class LineSegment {
 	}
 }
 
-class Sweep {
-	field timeProportion;
-	field acrossProportion;
-
-	constructor(timeProportion, acrossProportion) {
-		this.timeProportion = timeProportion;
-		this.acrossProportion = acrossProportion;
-	}
-}
-
 function whenLineSweepsPoint(/*LineSegment*/ pathOfLineStartPoint, /*LineSegment*/ pathOfLineEndPoint, /*Point*/ point) {
 	a = point.minus(pathOfLineStartPoint.start);
 	b = pathOfLineStartPoint.delta.negate();
@@ -93,7 +83,7 @@ function whenLineSweepsPoint(/*LineSegment*/ pathOfLineStartPoint, /*LineSegment
 			end = pathOfLineEndPoint.lerpAcross(t);
 			s = lerpProjectOnto(point, new LineSegment(start, end));
 			if (s != null && 0.0 <= s && s <= 1.0) {
-				result.add(new Sweep(t, s));
+				result.add([t, s]);
 			}
 		}
 	}
