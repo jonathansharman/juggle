@@ -1,4 +1,5 @@
 import Graphics2D;
+import Graphics2DText;
 import Math;
 import Random;
 import TwoCansAlpha4;
@@ -21,6 +22,10 @@ const GRAVITY = 0.2;
 const NEW_BALL_PERIOD = 500;
 
 class MainScene : AbstractScene {
+	static field font = FontResource.fromSystem("Times New Roman").getRenderer()
+			.setColor(0, 0, 0)
+			.setSize(16);
+
 	field rotating = false;
 
 	field paddlePos = new Point(X_RES / 2.0, (Y_RES - Y_BARRIER) / 2.0);
@@ -32,6 +37,8 @@ class MainScene : AbstractScene {
 	field ballsVel = [];
 
 	field newBallTimer = NEW_BALL_PERIOD;
+
+	field maxBalls = 0;
 
 	constructor() {
 		this.paddleLeftPos = new Point(this.paddlePos.x - PADDLE_RADIUS, this.paddlePos.y);
@@ -46,6 +53,8 @@ class MainScene : AbstractScene {
 			this.ballsVel.add(new Vector(Random.randomFloat() * 2.0 - 1.0, 0.0));
 			this.newBallTimer = NEW_BALL_PERIOD;
 		}
+		// Update max balls.
+		this.maxBalls = Math.max(this.maxBalls, this.ballsPos.length);
 		// Get new paddle position.
 		mousePos = inputManager.getMousePosition();
 		newPaddlePos = new Point(mousePos[0], mousePos[1]);
@@ -155,5 +164,8 @@ class MainScene : AbstractScene {
 				, 0, 0, 0
 				);
 		}
+
+		// Draw max balls.
+		MainScene.font.render(this.maxBalls + "  ").draw(X_RES - scoreText.width, 0);
 	}
 }
