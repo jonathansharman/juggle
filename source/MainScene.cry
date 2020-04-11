@@ -7,19 +7,22 @@ import TwoCansAlpha4;
 const X_RES = 640.0;
 const Y_RES = 480.0;
 
-const Y_BARRIER = 0.75 * Y_RES;
+const Y_BARRIER = 0.5 * Y_RES;
 
 const PADDLE_RADIUS = 50.0;
 const PADDLE_THICKNESS = 10.0;
 
-const ROTATION_PER_FRAME = 0.05;
+const ROTATION_RATE = 0.02;
 const MAX_ABS_ANGLE = 0.15 * Math.PI;
 
 const BALL_RADIUS = 7.0;
 
 const GRAVITY = 0.12;
 
+const CONSERVATION_RATE = 0.96;
+
 const NEW_BALL_PERIOD = 500;
+const MAX_INITIAL_VX = 10.0;
 
 // Proportion of paddle velocity transferred to balls on contact.
 const VEL_TRANSFER = 0.2;
@@ -51,7 +54,7 @@ class MainScene : AbstractScene {
 		--this.newBallTimer;
 		if (this.ballsPos.length == 0 || this.newBallTimer == 0) {
 			this.ballsPos.add(new Point(Random.randomFloat() * X_RES, 0));
-			this.ballsVel.add(new Vector(Random.randomFloat() * 2.0 - 1.0, 0.0));
+			this.ballsVel.add(new Vector(MAX_INITIAL_VX * (Random.randomFloat() * 2.0 - 1.0), 0.0));
 			this.newBallTimer = NEW_BALL_PERIOD;
 		}
 		// Update max balls.
@@ -71,20 +74,13 @@ class MainScene : AbstractScene {
 		}
 		// Paddle rotation.
 		if (inputManager.isKeyPressed(KeyboardKey.A) && this.paddleAngle > -MAX_ABS_ANGLE) {
-			this.paddleAngle -= ROTATION_PER_FRAME;
+			this.paddleAngle -= ROTATION_RATE;
 		}
 		if (inputManager.isKeyPressed(KeyboardKey.D) && this.paddleAngle < MAX_ABS_ANGLE) {
-			this.paddleAngle += ROTATION_PER_FRAME;
+			this.paddleAngle += ROTATION_RATE;
 		}
 		if (inputManager.isKeyPressed(KeyboardKey.S)) {
-			if (Math.abs(this.paddleAngle) < ROTATION_PER_FRAME) {
-				this.paddleAngle = 0.0;
-			}
-			if (this.paddleAngle > 0.0) {
-				this.paddleAngle -= ROTATION_PER_FRAME;
-			} else if (this.paddleAngle < 0.0) {
-				this.paddleAngle += ROTATION_PER_FRAME;
-			}
+			this.paddleAngle = 0.0;
 		}
 		// Compute paddle endpoints.
 		x = Math.cos(this.paddleAngle);
@@ -97,35 +93,39 @@ class MainScene : AbstractScene {
 		for (i = 0; i < this.ballsPos.length; ++i) {
 			// Update velocity.
 			this.ballsVel[i].y += GRAVITY;
-			// Update position.
-			newBallPos = new Point(this.ballsPos[i].x + this.ballsVel[i].x, this.ballsPos[i].y + this.ballsVel[i].y);
-			// Check for intersection with paddle only for balls moving downward.
-			sweeps = whenLineSweepsPoint
-				( new LineSegment
-					( this.paddleLeftPos.minus(this.ballsPos[i])
-					, newPaddleLeftPos.minus(newBallPos)
-					)
-				, new LineSegment
-					( this.paddleRightPos.minus(this.ballsPos[i])
-					, newPaddleRightPos.minus(newBallPos)
-					)
-				, new Point(0.0, 0.0)
-				);
-			if (sweeps.length > 0) {
-				for (sweep : sweeps) {
-					hitPos = new LineSegment(this.ballsPos[i], newBallPos).lerpAcross(sweep[0]);
-					// Reflect velocity over the normal.
-					n = new Vector(-Math.sin(this.paddleAngle), Math.cos(this.paddleAngle));
-					d = this.ballsVel[i];
-					r = d.minus(n.times(2 * d.dot(n)));
-					this.ballsVel[i] = r;
-					this.ballsVel[i] = this.ballsVel[i].plus(n.times(VEL_TRANSFER * paddleVel.dot(n)));
-					// Compute the ball's corrected position.
-					this.ballsPos[i] = hitPos.plus(this.ballsVel[i].times(1.0 - sweep[0]));
+			// Compute updated position if no collision.
+			newBallPos = this.ballsPos[i].plus(this.ballsVel[i]);
+			if (this.ballsVel[i].y > 0.0) {
+				// Check for collisions with falling balls only.
+				sweeps = whenLineSweepsPoint
+					( new LineSegment
+						( this.paddleLeftPos.minus(this.ballsPos[i])
+						, newPaddleLeftPos.minus(newBallPos)
+						)
+					, new LineSegment
+						( this.paddleRightPos.minus(this.ballsPos[i])
+						, newPaddleRightPos.minus(newBallPos)
+						)
+					, new Point(0.0, 0.0)
+					);
+				if (sweeps.length > 0) {
+					for (sweep : sweeps) {
+						hitPos = new LineSegment(this.ballsPos[i], newBallPos).lerpAcross(sweep[0]);
+						// Reflect velocity over the normal, losing a little speed.
+						n = new Vector(-Math.sin(this.paddleAngle), Math.cos(this.paddleAngle));
+						d = this.ballsVel[i];
+						dDotN = d.dot(n);
+						r = d.minus(n.times((1.0 + CONSERVATION_RATE) * dDotN));
+						this.ballsVel[i] = r;
+						// Transfer momentum from paddle.
+						this.ballsVel[i] = this.ballsVel[i].plus(n.times(VEL_TRANSFER * paddleVel.dot(n)));
+						// Compute the ball's corrected position.
+						newBallPos = hitPos.plus(this.ballsVel[i].times(1.0 - sweep[0]));
+					}
 				}
-			} else {
-				this.ballsPos[i] = newBallPos;
 			}
+			// Update ball's position.
+			this.ballsPos[i] = newBallPos;
 			// Bounce off walls.
 			if ((this.ballsPos[i].x > X_RES && this.ballsVel[i].x > 0.0) || (this.ballsPos[i].x < 0.0 && this.ballsVel[i].x < 0.0)) {
 				this.ballsVel[i].x = -this.ballsVel[i].x;
