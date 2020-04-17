@@ -1,3 +1,4 @@
+import Audio;
 import Graphics2D;
 import Graphics2DText;
 import Math;
@@ -29,6 +30,7 @@ const VEL_TRANSFER = 0.2;
 
 class MainScene : AbstractScene {
 	static field font = FontResource.fromSystem("Times New Roman").getRenderer().setSize(16);
+	static field bounceSound = Audio.SoundResource.loadFromResource("bounce.ogg");
 
 	field rotating = false;
 
@@ -121,6 +123,8 @@ class MainScene : AbstractScene {
 						this.ballsVel[i] = this.ballsVel[i].plus(n.times(VEL_TRANSFER * paddleVel.dot(n)));
 						// Compute the ball's corrected position.
 						newBallPos = hitPos.plus(this.ballsVel[i].times(1.0 - sweep[0]));
+						// Play bounce sound.
+						MainScene.bounceSound.play();
 					}
 				}
 			}
