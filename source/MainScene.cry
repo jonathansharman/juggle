@@ -28,9 +28,12 @@ const MAX_INITIAL_VX = 10.0;
 // Proportion of paddle velocity transferred to balls on contact.
 const VEL_TRANSFER = 0.2;
 
+// The minimum (velicity * normal) required to play the bounce sound at maximum volume.
+const MAX_VOLUME_THRESHOLD = 25.0;
+
 class MainScene : AbstractScene {
 	static field font = FontResource.fromSystem("Times New Roman").getRenderer().setSize(16);
-	static field bounceSound = Audio.SoundResource.loadFromResource("bounce.ogg");
+	static field bounceSoundResource = Audio.SoundResource.loadFromResource("bounce.ogg");
 
 	field rotating = false;
 
@@ -115,16 +118,17 @@ class MainScene : AbstractScene {
 						hitPos = new LineSegment(this.ballsPos[i], newBallPos).lerpAcross(sweep[0]);
 						// Reflect velocity over the normal, losing a little speed.
 						n = new Vector(-Math.sin(this.paddleAngle), Math.cos(this.paddleAngle));
-						d = this.ballsVel[i];
-						dDotN = d.dot(n);
-						r = d.minus(n.times((1.0 + CONSERVATION_RATE) * dDotN));
+						v = this.ballsVel[i];
+						vDotN = v.dot(n);
+						r = v.minus(n.times((1.0 + CONSERVATION_RATE) * vDotN));
 						this.ballsVel[i] = r;
 						// Transfer momentum from paddle.
 						this.ballsVel[i] = this.ballsVel[i].plus(n.times(VEL_TRANSFER * paddleVel.dot(n)));
 						// Compute the ball's corrected position.
 						newBallPos = hitPos.plus(this.ballsVel[i].times(1.0 - sweep[0]));
 						// Play bounce sound.
-						MainScene.bounceSound.play();
+						MainScene.bounceSoundResource.play(-0.5 + newBallPos.x / X_RES)
+							.setVolume(vDotN > MAX_VOLUME_THRESHOLD ? 1.0 : vDotN / MAX_VOLUME_THRESHOLD);
 					}
 				}
 			}
@@ -140,6 +144,7 @@ class MainScene : AbstractScene {
 			if (this.ballsPos[i].y > Y_RES) {
 				this.ballsPos.remove(i);
 				this.ballsVel.remove(i);
+				--i;
 			}
 		}
 		// Update paddle position.
