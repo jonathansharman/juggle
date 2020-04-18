@@ -2,86 +2,50 @@
 
 import Math;
 
-class Vector {
-	field x;
-	field y;
-
-	constructor(x, y) {
-		this.x = x;
-		this.y = y;
-	}
-
-	function plus(that) {
-		return new Vector(this.x + that.x, this.y + that.y);
-	}
-
-	function minus(that) {
-		return new Vector(this.x - that.x, this.y - that.y);
-	}
-
-	function negate() {
-		return new Vector(-this.x, -this.y);
-	}
-
-	function times(scale) {
-		return new Vector(this.x * scale, this.y * scale);
-	}
-
-	function dot(that) {
-		return this.x * that.x + this.y * that.y;
-	}
-
-	function cross(that) {
-		return this.x * that.y - this.y * that.x;
-	}
+function plus(v1, v2) {
+	return [v1[0] + v2[0], v1[1] + v2[1]];
 }
 
-class Point {
-	field x;
-	field y;
-
-	constructor(x, y) {
-		this.x = x;
-		this.y = y;
-	}
-
-	function plus(delta) {
-		return new Point(this.x + delta.x, this.y + delta.y);
-	}
-
-	function minus(that) {
-		return new Vector(this.x - that.x, this.y - that.y);
-	}
+function minus(v1, v2) {
+	return [v1[0] - v2[0], v1[1] - v2[1]];
 }
 
-class LineSegment {
-	field start;
-	field delta;
+function negate(v) {
+	return [-v[0], -v[1]];
+}
 
-	constructor(start, end) {
-		this.start = start;
-		this.delta = end.minus(start);
-	}
+function times(v, scale) {
+	return [v[0] * scale, v[1] * scale];
+}
 
-	function end() { return this.start.plus(this.delta); }
+function dot(v1, v2) {
+	return v1[0] * v2[0] + v1[1] * v2[1];
+}
 
-	function lerpAcross(proportion) {
-		return this.start.plus(this.delta.times(proportion));
-	}
+function cross(v1, v2) {
+	return v1[0] * v2[1] - v1[1] * v2[0];
+}
+
+function makeLineSegment(start, end) {
+	return {"start": start, "delta": minus(end, start)};
+}
+
+function lerpAcross(lineSegment, proportion) {
+	return plus(lineSegment["start"], times(lineSegment["delta"], proportion));
 }
 
 function whenLineSweepsPoint(/*LineSegment*/ pathOfLineStartPoint, /*LineSegment*/ pathOfLineEndPoint, /*Point*/ point) {
-	a = point.minus(pathOfLineStartPoint.start);
-	b = pathOfLineStartPoint.delta.negate();
-	c = pathOfLineEndPoint.start.minus(pathOfLineStartPoint.start);
-	d = pathOfLineEndPoint.delta.minus(pathOfLineStartPoint.delta);
+	a = minus(point, pathOfLineStartPoint["start"]);
+	b = negate(pathOfLineStartPoint["delta"]);
+	c = minus(pathOfLineEndPoint["start"], pathOfLineStartPoint["start"]);
+	d = minus(pathOfLineEndPoint["delta"], pathOfLineStartPoint["delta"]);
 
 	result = [];
-	for (t : quadraticRoots(b.cross(d), a.cross(d) + b.cross(c), a.cross(c))) {
+	for (t : quadraticRoots(cross(b, d), cross(a, d) + cross(b, c), cross(a, c))) {
 		if (0.0 <= t && t <= 1.0) {
-			start = pathOfLineStartPoint.lerpAcross(t);
-			end = pathOfLineEndPoint.lerpAcross(t);
-			s = lerpProjectOnto(point, new LineSegment(start, end));
+			start = lerpAcross(pathOfLineStartPoint, t);
+			end = lerpAcross(pathOfLineEndPoint, t);
+			s = lerpProjectOnto(point, makeLineSegment(start, end));
 			if (s != null && 0.0 <= s && s <= 1.0) {
 				result.add([t, s]);
 			}
@@ -91,8 +55,8 @@ function whenLineSweepsPoint(/*LineSegment*/ pathOfLineStartPoint, /*LineSegment
 }
 
 function lerpProjectOnto(/*Point*/ point, /*LineSegment*/ line) {
-	d = line.delta.dot(line.delta);
-	return d == 0.0 ? null : point.minus(line.start).dot(line.delta) / d;
+	d = dot(line["delta"], line["delta"]);
+	return d == 0.0 ? null : dot(minus(point, line["start"]), line["delta"]) / d;
 }
 
 function quadraticRoots(a, b, c) {

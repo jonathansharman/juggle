@@ -18,12 +18,12 @@ const MAX_ABS_ANGLE = 0.15 * Math.PI;
 
 const BALL_RADIUS = 7.0;
 
-const GRAVITY = 0.12;
+const GRAVITY = 0.025;
 
 const CONSERVATION_RATE = 0.96;
 
 const NEW_BALL_PERIOD = 500;
-const MAX_INITIAL_VX = 10.0;
+const MAX_INITIAL_VX = 5.0;
 
 // Proportion of paddle velocity transferred to balls on contact.
 const VEL_TRANSFER = 0.2;
@@ -37,7 +37,7 @@ class MainScene : AbstractScene {
 
 	field rotating = false;
 
-	field paddlePos = new Point(X_RES / 2.0, (Y_RES - Y_BARRIER) / 2.0);
+	field paddlePos = [X_RES / 2.0, (Y_RES - Y_BARRIER) / 2.0];
 	field paddleLeftPos;
 	field paddleRightPos;
 	field paddleAngle = 0.0;
@@ -50,32 +50,32 @@ class MainScene : AbstractScene {
 	field maxBalls = 0;
 
 	constructor() {
-		this.paddleLeftPos = new Point(this.paddlePos.x - PADDLE_RADIUS, this.paddlePos.y);
-		this.paddleRightPos = new Point(this.paddlePos.x + PADDLE_RADIUS, this.paddlePos.y);
+		this.paddleLeftPos = [this.paddlePos[0] - PADDLE_RADIUS, this.paddlePos[1]];
+		this.paddleRightPos = [this.paddlePos[0] + PADDLE_RADIUS, this.paddlePos[1]];
 	}
 
 	function update(inputManager, events) {
 		// Spawn balls periodically.
 		--this.newBallTimer;
 		if (this.ballsPos.length == 0 || this.newBallTimer == 0) {
-			this.ballsPos.add(new Point(Random.randomFloat() * X_RES, 0));
-			this.ballsVel.add(new Vector(MAX_INITIAL_VX * (Random.randomFloat() * 2.0 - 1.0), 0.0));
+			this.ballsPos.add([Random.randomFloat() * X_RES, 0]);
+			this.ballsVel.add([MAX_INITIAL_VX * (Random.randomFloat() * 2.0 - 1.0), 0.0]);
 			this.newBallTimer = NEW_BALL_PERIOD;
 		}
 		// Update max balls.
 		this.maxBalls = Math.max(this.maxBalls, this.ballsPos.length);
 		// Get new paddle position.
 		mousePos = inputManager.getMousePosition();
-		newPaddlePos = new Point(mousePos[0], mousePos[1]);
-		if (newPaddlePos.x < 0.0) {
-			newPaddlePos.x = 0.0;
-		} else if (newPaddlePos.x > X_RES) {
-			newPaddlePos.x = X_RES;
+		newPaddlePos = [mousePos[0], mousePos[1]];
+		if (newPaddlePos[0] < 0.0) {
+			newPaddlePos[0] = 0.0;
+		} else if (newPaddlePos[0] > X_RES) {
+			newPaddlePos[0] = X_RES;
 		}
-		if (newPaddlePos.y < Y_BARRIER) {
-			newPaddlePos.y = Y_BARRIER;
-		} else if (newPaddlePos.y > Y_RES) {
-			newPaddlePos.y = Y_RES;
+		if (newPaddlePos[1] < Y_BARRIER) {
+			newPaddlePos[1] = Y_BARRIER;
+		} else if (newPaddlePos[1] > Y_RES) {
+			newPaddlePos[1] = Y_RES;
 		}
 		// Paddle rotation.
 		if (inputManager.isKeyPressed(KeyboardKey.A) && this.paddleAngle > -MAX_ABS_ANGLE) {
@@ -90,44 +90,44 @@ class MainScene : AbstractScene {
 		// Compute paddle endpoints.
 		x = Math.cos(this.paddleAngle);
 		y = Math.sin(this.paddleAngle);
-		newPaddleLeftPos = new Point(this.paddlePos.x - x * PADDLE_RADIUS, this.paddlePos.y - y * PADDLE_RADIUS);
-		newPaddleRightPos = new Point(this.paddlePos.x + x * PADDLE_RADIUS, this.paddlePos.y + y * PADDLE_RADIUS);
+		newPaddleLeftPos = [this.paddlePos[0] - x * PADDLE_RADIUS, this.paddlePos[1] - y * PADDLE_RADIUS];
+		newPaddleRightPos = [this.paddlePos[0] + x * PADDLE_RADIUS, this.paddlePos[1] + y * PADDLE_RADIUS];
 		// Compute central paddle velocity.
-		paddleVel = newPaddlePos.minus(this.paddlePos);
+		paddleVel = minus(newPaddlePos, this.paddlePos);
 		// Update physics.
 		for (i = 0; i < this.ballsPos.length; ++i) {
 			// Update velocity.
-			this.ballsVel[i].y += GRAVITY;
+			this.ballsVel[i][1] += GRAVITY;
 			// Compute updated position if no collision.
-			newBallPos = this.ballsPos[i].plus(this.ballsVel[i]);
-			if (this.ballsVel[i].y > 0.0) {
+			newBallPos = plus(this.ballsPos[i], this.ballsVel[i]);
+			if (this.ballsVel[i][1] > 0.0) {
 				// Check for collisions with falling balls only.
 				sweeps = whenLineSweepsPoint
-					( new LineSegment
-						( this.paddleLeftPos.minus(this.ballsPos[i])
-						, newPaddleLeftPos.minus(newBallPos)
+					( makeLineSegment
+						( minus(this.paddleLeftPos, this.ballsPos[i])
+						, minus(newPaddleLeftPos, newBallPos)
 						)
-					, new LineSegment
-						( this.paddleRightPos.minus(this.ballsPos[i])
-						, newPaddleRightPos.minus(newBallPos)
+					, makeLineSegment
+						( minus(this.paddleRightPos, this.ballsPos[i])
+						, minus(newPaddleRightPos, newBallPos)
 						)
-					, new Point(0.0, 0.0)
+					, [0.0, 0.0]
 					);
 				if (sweeps.length > 0) {
 					for (sweep : sweeps) {
-						hitPos = new LineSegment(this.ballsPos[i], newBallPos).lerpAcross(sweep[0]);
+						hitPos = lerpAcross(makeLineSegment(this.ballsPos[i], newBallPos), sweep[0]);
 						// Reflect velocity over the normal, losing a little speed.
-						n = new Vector(-Math.sin(this.paddleAngle), Math.cos(this.paddleAngle));
+						n = [-Math.sin(this.paddleAngle), Math.cos(this.paddleAngle)];
 						v = this.ballsVel[i];
-						vDotN = v.dot(n);
-						r = v.minus(n.times((1.0 + CONSERVATION_RATE) * vDotN));
+						vDotN = dot(v, n);
+						r = minus(v, times(n, (1.0 + CONSERVATION_RATE) * vDotN));
 						this.ballsVel[i] = r;
 						// Transfer momentum from paddle.
-						this.ballsVel[i] = this.ballsVel[i].plus(n.times(VEL_TRANSFER * paddleVel.dot(n)));
+						this.ballsVel[i] = plus(this.ballsVel[i], times(n, VEL_TRANSFER * dot(paddleVel, n)));
 						// Compute the ball's corrected position.
-						newBallPos = hitPos.plus(this.ballsVel[i].times(1.0 - sweep[0]));
+						newBallPos = plus(hitPos, times(this.ballsVel[i], 1.0 - sweep[0]));
 						// Play bounce sound.
-						MainScene.bounceSoundResource.play(-0.5 + newBallPos.x / X_RES)
+						MainScene.bounceSoundResource.play(-0.5 + newBallPos[0] / X_RES)
 							.setVolume(vDotN > MAX_VOLUME_THRESHOLD ? 1.0 : vDotN / MAX_VOLUME_THRESHOLD);
 					}
 				}
@@ -135,13 +135,13 @@ class MainScene : AbstractScene {
 			// Update ball's position.
 			this.ballsPos[i] = newBallPos;
 			// Bounce off walls.
-			if ((this.ballsPos[i].x > X_RES && this.ballsVel[i].x > 0.0) || (this.ballsPos[i].x < 0.0 && this.ballsVel[i].x < 0.0)) {
-				this.ballsVel[i].x = -this.ballsVel[i].x;
+			if ((this.ballsPos[i][0] > X_RES && this.ballsVel[i][0] > 0.0) || (this.ballsPos[i][0] < 0.0 && this.ballsVel[i][0] < 0.0)) {
+				this.ballsVel[i][0] = -this.ballsVel[i][0];
 			}
 		}
 		// Purge out-of-bounds balls.
 		for (i = 0; i < this.ballsPos.length; ++i) {
-			if (this.ballsPos[i].y > Y_RES) {
+			if (this.ballsPos[i][1] > Y_RES) {
 				this.ballsPos.remove(i);
 				this.ballsVel.remove(i);
 				--i;
@@ -167,24 +167,24 @@ class MainScene : AbstractScene {
 		x = Math.cos(this.paddleAngle);
 		y = Math.sin(this.paddleAngle);
 		Graphics2D.Draw.line
-			( this.paddleLeftPos.x, this.paddleLeftPos.y
-			, this.paddleRightPos.x, this.paddleRightPos.y
+			( this.paddleLeftPos[0], this.paddleLeftPos[1]
+			, this.paddleRightPos[0], this.paddleRightPos[1]
 			, PADDLE_THICKNESS
 			, 0, 0, 0
 			);
 
 		// Draw balls.
 		for (i = 0; i < this.ballsPos.length; ++i) {
-			if (this.ballsPos[i].y < -BALL_RADIUS) {
+			if (this.ballsPos[i][1] < -BALL_RADIUS) {
 				Graphics2D.Draw.triangle
-					( this.ballsPos[i].x, 5
-					, this.ballsPos[i].x - 7, 19
-					, this.ballsPos[i].x + 7, 19
-					, 0, 0, 0, 10000 / -this.ballsPos[i].y
+					( this.ballsPos[i][0], 5
+					, this.ballsPos[i][0] - 7, 19
+					, this.ballsPos[i][0] + 7, 19
+					, 0, 0, 0, 10000 / -this.ballsPos[i][1]
 					);
 			} else {
 				Graphics2D.Draw.ellipse
-					( this.ballsPos[i].x - BALL_RADIUS, this.ballsPos[i].y - BALL_RADIUS
+					( this.ballsPos[i][0] - BALL_RADIUS, this.ballsPos[i][1] - BALL_RADIUS
 					, 2.0 * BALL_RADIUS, 2.0 * BALL_RADIUS
 					, 0, 0, 0
 					);
